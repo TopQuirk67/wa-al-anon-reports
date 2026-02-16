@@ -69,7 +69,7 @@ function onFormSubmit(e) {
     
     var data = {
       timestamp: timestamp,
-      email: responses['email'][0],
+      email: responses['email (must be of the form abc@wa-al-anon.org)'][0],
       name: responses['Name (First name and Last initial)'][0],
       position: responses['Position'][0],
       assembly: responses['For which Assembly is this report?'][0],
