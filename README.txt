@@ -1,24 +1,35 @@
-## 📖 UPDATED README.txt
-```
 ================================================================================
-ASSEMBLY REPORT AUTOMATION SYSTEM
+ASSEMBLY AND NEWSLETTER REPORT AUTOMATION SYSTEM
 Washington Area Al-Anon - Panel 65
 ================================================================================
 
 OVERVIEW
 --------
-
-This code can be found at: https://github.com/TopQuirk67/wa-al-anon-reports
-
 This system automatically processes Officer and Coordinator reports submitted 
-via Google Form. When someone submits a report, the system:
+via Google Form. It handles both Assembly Reports and Newsletter Reports.
 
+When someone submits a report, the system:
 1. Auto-calculates Panel number and Year from submission timestamp
 2. Creates an English report document in the correct folder
 3. Creates a Spanish version using a Spanish-language template
 4. Gives the submitter edit access to both documents
 5. Emails them links with folder location
-6. Overwrites previous reports if they resubmit
+6. CCs the appropriate coordinator (Secretary for Assembly, Newsletter for Newsletter)
+7. Overwrites previous reports if they resubmit
+
+REPORT TYPES
+------------
+The form supports two types of reports:
+
+1. ASSEMBLY REPORTS
+   - Submitted for specific assemblies (1-AWSC-Feb, 2-Pre-Con, etc.)
+   - Filed in: Panel XX/YYYY/Assembly-Name/Reports - Assemblies/
+   - CCs: secretary@wa-al-anon.org (and gareth.houk@gmail.com for testing)
+
+2. NEWSLETTER REPORTS
+   - Submitted for quarterly newsletters (Q1, Q2, Q3, Q4)
+   - Filed in: Panel XX/Newsletter/YYYY/Quarter/
+   - CCs: newsletter@wa-al-anon.org (and gareth.houk@gmail.com for testing)
 
 AUTO-CALCULATED FIELDS
 ----------------------
@@ -30,16 +41,45 @@ Panel Number: Calculated from submission year
 
 Year: Extracted from submission timestamp
 
-Users only need to select:
-  - Assembly (dropdown: 1-AWSC-Feb, 2-Pre-Con, etc.)
-  - Everything else is calculated or provided by them
+Users only need to provide:
+  - Email, Name, Position
+  - Report Type (Assembly or Newsletter)
+  - Assembly name OR Quarter (depending on type)
+  - Report Text
+
+FORM STRUCTURE
+--------------
+The form uses conditional logic (sections):
+
+Section 1: Common Questions
+  - Email
+  - Name (First name and Last initial)
+  - Position
+  - Report Type (branches to Section 2 or 3)
+
+Section 2: Assembly Reports (if Assembly selected)
+  - Assembly dropdown (1-AWSC-Feb, 2-Pre-Con, etc.)
+  - Goes to Section 4
+
+Section 3: Newsletter Reports (if Newsletter selected)
+  - Quarter dropdown (Q1, Q2, Q3, Q4)
+  - Goes to Section 4
+
+Section 4: Common Final Questions
+  - Report Text
+  - Submit
 
 FOLDER STRUCTURE
 ----------------
-Reports are organized as:
-Public / Panel XX / YYYY / Assembly Name / Reports - Assemblies /
+Reports are organized differently based on type:
 
+ASSEMBLY REPORTS:
+Public/Panel XX/YYYY/Assembly-Name/Reports - Assemblies/
 Example: Public/Panel 65/2026/1-AWSC-Feb/Reports - Assemblies/
+
+NEWSLETTER REPORTS:
+Public/Panel XX/Newsletter/YYYY/Quarter/
+Example: Public/Panel 65/Newsletter/2026/Q1/
 
 IMPORTANT: The folder structure MUST exist before reports are submitted.
 The script will NOT create folders - it will throw an error if the path
@@ -47,8 +87,13 @@ doesn't exist.
 
 DOCUMENT NAMING
 ---------------
-English: Report-Panel 65-2026-1-AWSC-Feb-Chair (Officer)
-Spanish: informe-Panel 65-2026-1-AWSC-Feb-Presidente (Oficial)
+Assembly Reports:
+  English: Report-Panel 65-2026-1-AWSC-Feb-Chair (Officer)
+  Spanish: informe-Panel 65-2026-1-AWSC-Feb-Presidente (Oficial)
+
+Newsletter Reports:
+  English: Report-Panel 65-Newsletter-2026-Q1-Newsletter (Coordinator)
+  Spanish: informe-Panel 65-Newsletter-2026-Q1-Boletín informativo (Coordinador)
 
 OVERWRITE BEHAVIOR
 ------------------
@@ -64,9 +109,14 @@ TEMPLATE DOCUMENTS
 English Template ID: 1qSAS949nahWxQEnXiJZUGLTlbiEFmfGk0SplzX48bvo
 Spanish Template ID: 1rz17tYM7ull439sKJbmOtgkZn7egZ-vdF2HbdYX0LlU
 
+Both templates work for both Assembly and Newsletter reports!
+
 English placeholders:
 {{NAME}}, {{POSITION}}, {{PANEL}}, {{YEAR}}, {{ASSEMBLY}}, {{TEXT}}, 
 {{DATE}}, {{EMAIL}}
+
+Note: {{ASSEMBLY}} will contain either the assembly name (1-AWSC-Feb) 
+or the quarter (Q1) depending on report type.
 
 Spanish placeholders:
 {{NAME}}, {{POSITIONSPANISH}}, {{PANEL}}, {{YEAR}}, {{ASSEMBLY}}, 
@@ -76,8 +126,9 @@ To modify templates:
 1. Open the template document
 2. Edit layout, formatting, headers, etc.
 3. Keep the {{PLACEHOLDER}} tags where you want data inserted
-4. Save the template
-5. New reports will use the updated template
+4. The template works for both report types - no need for separate templates
+5. Save the template
+6. New reports will use the updated template
 
 THE SCRIPT
 ----------
@@ -88,8 +139,24 @@ Key configuration values at the top (CONFIG object):
 - englishTemplateId: English template doc
 - spanishTemplateId: Spanish template doc
 - sharedDriveId: The Public Shared Drive
-- adminEmails: Who gets notified of errors
+- assemblyAdminEmails: Who gets CC'd on Assembly reports
+- newsletterAdminEmails: Who gets CC'd on Newsletter reports
 - positionTranslations: English-to-Spanish position mappings
+
+ADMIN EMAIL ADDRESSES
+---------------------
+Currently configured for testing:
+
+Assembly Reports:
+  - secretary@wa-al-anon.org
+  - gareth.houk@gmail.com
+
+Newsletter Reports:
+  - newsletter@wa-al-anon.org
+  - gareth.houk@gmail.com
+
+To change after testing: Edit CONFIG.assemblyAdminEmails and 
+CONFIG.newsletterAdminEmails in the script.
 
 ERROR HANDLING
 --------------
@@ -97,21 +164,21 @@ Two-tier error system:
 
 1. USER ERRORS (validation failures):
    - Invalid email format
-   - Missing assembly selection
+   - Missing report type selection
+   - Missing assembly/quarter selection
    - Empty report text
    → User gets friendly email explaining what to fix
-   → Admins get notification for tracking
+   → Appropriate admins get notification for tracking
 
 2. SYSTEM ERRORS (infrastructure problems):
    - Folder not found
    - Template broken
    - Permission issues
-   → Admins get detailed error email
-   → User sees generic error (doesn't expose internal details)
+   → Appropriate admins get detailed error email
+   → User sees generic error
 
-Admin emails currently set to:
-- chair@wa-al-anon.org
-- gareth.houk@gmail.com (for testing)
+The system automatically determines which admins to notify based on
+the Report Type selected.
 
 TROUBLESHOOTING
 ---------------
@@ -125,9 +192,20 @@ If reports aren't being created:
    - No email? Check system error notification to admins
 
 3. Verify folder structure exists:
-   Public/Panel XX/YYYY/Assembly-Name/Reports - Assemblies/
+   - Assembly: Panel XX/YYYY/Assembly-Name/Reports - Assemblies/
+   - Newsletter: Panel XX/Newsletter/YYYY/Quarter/
 
 4. Check template IDs are correct in CONFIG
+
+5. Verify form field names match exactly:
+   - Timestamp
+   - email (must be of the form abc@wa-al-anon.org)
+   - Name (First name and Last initial)
+   - Position
+   - Report Type
+   - For which Assembly is this report?
+   - For which Quarter is this Newsletter report?
+   - Report Text
 
 UPDATING FOR NEW PANELS
 ------------------------
@@ -137,7 +215,9 @@ The script automatically calculates the panel number from the submission
 date. When Panel 68 starts in 2028, it will automatically use Panel 68.
 
 Just ensure the folder structure exists for new panels before people
-start submitting reports.
+start submitting reports. Remember to create BOTH:
+- Panel 68/YYYY/... (for Assembly reports)
+- Panel 68/Newsletter/YYYY/... (for Newsletter reports)
 
 POSITION TRANSLATIONS
 ---------------------
@@ -167,12 +247,30 @@ Quality: The translation is automatic (Google Translate quality). Users
 understand this and appreciate the effort. Professional translation is
 not expected.
 
+SPREADSHEET STRUCTURE
+---------------------
+The linked spreadsheet will have these columns:
+
+- Timestamp
+- email (must be of the form abc@wa-al-anon.org)
+- Name (First name and Last initial)
+- Position
+- Report Type
+- For which Assembly is this report? (blank for Newsletter reports)
+- For which Quarter is this Newsletter report? (blank for Assembly reports)
+- Report Text
+
+Note: Assembly and Quarter columns will have blank values depending on
+which type of report was submitted. This is normal and expected.
+
 CONTACT
 -------
 For questions or issues with this system:
 Gary H, gareth.houk@gmail.com (Panel 65 Chair)
 
+GitHub Repository: [Add your repo URL here when created]
+
 ================================================================================
 Last Updated: February 2026
-Version: 2.0 (Auto-calculate Panel/Year, Spanish template, Overwrite mode)
+Version: 2.0 (Dual report types: Assembly + Newsletter)
 ================================================================================

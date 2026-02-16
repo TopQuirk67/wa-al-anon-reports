@@ -1,15 +1,16 @@
 // ============================================================================
-// OFFICER AND COORDINATOR ASSEMBLY REPORT AUTOMATION
+// OFFICER AND COORDINATOR REPORT AUTOMATION
 // Panel 65 - Washington Area Al-Anon
 // 
 // This script automatically:
 // 1. Auto-calculates Panel number and Year from submission timestamp
 // 2. Creates English report documents from form submissions
 // 3. Creates Spanish translated versions using Spanish template
-// 4. Overwrites existing reports if person resubmits
-// 5. Organizes them in the correct folder structure
-// 6. Emails the submitter with links to both documents
-// 7. Provides two-tier error handling (user errors vs system errors)
+// 4. Handles both Assembly Reports and Newsletter Reports
+// 5. Overwrites existing reports if person resubmits
+// 6. Organizes them in the correct folder structure
+// 7. Emails the submitter with links to both documents
+// 8. Provides two-tier error handling (user errors vs system errors)
 //
 // Maintained by: Gary H (gareth.houk@gmail.com) - Panel 65 Chair
 // ============================================================================
@@ -26,8 +27,9 @@ var CONFIG = {
   // Public Shared Drive ID
   sharedDriveId: '0AKCQ-c_MoLypUk9PVA',
   
-  // Admin emails for error notifications
-  adminEmails: ['chair@wa-al-anon.org', 'gareth.houk@gmail.com'],
+  // Admin emails for error notifications (by report type)
+  assemblyAdminEmails: ['chair@wa-al-anon.org', 'gareth.houk@gmail.com'],
+  newsletterAdminEmails: ['chair@wa-al-anon.org', 'gareth.houk@gmail.com'],
   
   // Position translations (English -> Spanish)
   positionTranslations: {
@@ -72,7 +74,9 @@ function onFormSubmit(e) {
       email: responses['email (must be of the form abc@wa-al-anon.org)'][0],
       name: responses['Name (First name and Last initial)'][0],
       position: responses['Position'][0],
-      assembly: responses['For which Assembly is this report?'][0],
+      reportType: responses['Report Type'][0],
+      assembly: responses['For which Assembly is this report?'] ? responses['For which Assembly is this report?'][0] : null,
+      quarter: responses['For which Quarter is this Newsletter report?'] ? responses['For which Quarter is this Newsletter report?'][0] : null,
       text: responses['Report Text'][0]
     };
     
@@ -88,19 +92,31 @@ function onFormSubmit(e) {
     data.positionSpanish = CONFIG.positionTranslations[data.position] || data.position;
     data.textSpanish = LanguageApp.translate(data.text, 'en', 'es');
     
-    Logger.log('Processed data: Panel=' + data.panel + ', Year=' + data.year + ', Assembly=' + data.assembly);
+    // Determine which admin emails to use
+    var adminEmails = (data.reportType === 'Assembly Report') 
+      ? CONFIG.assemblyAdminEmails 
+      : CONFIG.newsletterAdminEmails;
+    
+    Logger.log('Processed data: Panel=' + data.panel + ', Year=' + data.year + 
+               ', Type=' + data.reportType + ', Assembly=' + data.assembly + ', Quarter=' + data.quarter);
     
     // Validate submission
     var validationErrors = validateSubmission(data);
     if (validationErrors.length > 0) {
       Logger.log('Validation errors: ' + validationErrors.join('; '));
       sendUserErrorEmail(data, validationErrors);
-      notifyAdminsOfValidation(data, validationErrors);
+      notifyAdminsOfValidation(data, validationErrors, adminEmails);
       return;
     }
     
-    // Build the folder path and get the target folder
-    var folderPath = 'Panel ' + data.panel + '/' + data.year + '/' + data.assembly + '/Reports - Assemblies';
+    // Build the folder path based on report type
+    var folderPath;
+    if (data.reportType === 'Assembly Report') {
+      folderPath = 'Panel ' + data.panel + '/' + data.year + '/' + data.assembly + '/Reports - Assemblies';
+    } else {
+      folderPath = 'Panel ' + data.panel + '/Newsletter/' + data.year + '/' + data.quarter;
+    }
+    
     Logger.log('Looking for folder path: ' + folderPath);
     
     var targetFolder = findFolderByPath(CONFIG.sharedDriveId, folderPath);
@@ -111,11 +127,20 @@ function onFormSubmit(e) {
     
     Logger.log('Target folder found: ' + targetFolder.getName());
     
-    // Build filenames
-    var englishFilename = 'Report-Panel ' + data.panel + '-' + data.year + '-' + 
-                          data.assembly + '-' + data.position;
-    var spanishFilename = 'informe-Panel ' + data.panel + '-' + data.year + '-' + 
-                          data.assembly + '-' + data.positionSpanish;
+    // Build filenames based on report type
+    var englishFilename, spanishFilename;
+    
+    if (data.reportType === 'Assembly Report') {
+      englishFilename = 'Report-Panel ' + data.panel + '-' + data.year + '-' + 
+                        data.assembly + '-' + data.position;
+      spanishFilename = 'informe-Panel ' + data.panel + '-' + data.year + '-' + 
+                        data.assembly + '-' + data.positionSpanish;
+    } else {
+      englishFilename = 'Report-Panel ' + data.panel + '-Newsletter-' + data.year + '-' + 
+                        data.quarter + '-' + data.position;
+      spanishFilename = 'informe-Panel ' + data.panel + '-Newsletter-' + data.year + '-' + 
+                        data.quarter + '-' + data.positionSpanish;
+    }
     
     // Check for and delete existing documents (overwrite behavior)
     deleteExistingDocument(targetFolder, englishFilename);
@@ -137,7 +162,7 @@ function onFormSubmit(e) {
     Logger.log('Edit access granted to: ' + data.email);
     
     // Send notification email
-    sendSuccessEmail(data, englishDoc.getUrl(), spanishDoc.getUrl(), folderPath);
+    sendSuccessEmail(data, englishDoc.getUrl(), spanishDoc.getUrl(), folderPath, adminEmails);
     Logger.log('Notification email sent');
     
     Logger.log('=== Script Completed Successfully ===');
@@ -145,8 +170,17 @@ function onFormSubmit(e) {
   } catch (error) {
     Logger.log('SYSTEM ERROR: ' + error.toString());
     
+    // Determine admin emails for error notification
+    var errorAdminEmails = CONFIG.assemblyAdminEmails; // Default
+    if (e.namedValues && e.namedValues['Report Type']) {
+      var reportType = e.namedValues['Report Type'][0];
+      errorAdminEmails = (reportType === 'Assembly Report') 
+        ? CONFIG.assemblyAdminEmails 
+        : CONFIG.newsletterAdminEmails;
+    }
+    
     // Send error notification to admins
-    notifyAdminsOfSystemError(error, e);
+    notifyAdminsOfSystemError(error, e, errorAdminEmails);
     
     // Re-throw error so it appears in execution log
     throw error;
@@ -211,9 +245,20 @@ function validateSubmission(data) {
     errors.push('Invalid email format: must end with @wa-al-anon.org');
   }
   
-  // Validate assembly is not empty
-  if (!data.assembly || data.assembly.trim() === '') {
-    errors.push('Assembly selection is required');
+  // Validate report type is selected
+  if (!data.reportType) {
+    errors.push('Report Type is required');
+  }
+  
+  // Validate type-specific fields
+  if (data.reportType === 'Assembly Report') {
+    if (!data.assembly || data.assembly.trim() === '') {
+      errors.push('Assembly selection is required for Assembly Reports');
+    }
+  } else if (data.reportType === 'Newsletter Report') {
+    if (!data.quarter || data.quarter.trim() === '') {
+      errors.push('Quarter selection is required for Newsletter Reports');
+    }
   }
   
   // Validate report text is not empty
@@ -316,7 +361,14 @@ function createEnglishDocument(data, folder, filename) {
   body.replaceText('\\{\\{POSITION\\}\\}', data.position);
   body.replaceText('\\{\\{PANEL\\}\\}', data.panel.toString());
   body.replaceText('\\{\\{YEAR\\}\\}', data.year.toString());
-  body.replaceText('\\{\\{ASSEMBLY\\}\\}', data.assembly);
+  
+  // Replace Assembly or Quarter based on report type
+  if (data.reportType === 'Assembly Report') {
+    body.replaceText('\\{\\{ASSEMBLY\\}\\}', data.assembly);
+  } else {
+    body.replaceText('\\{\\{ASSEMBLY\\}\\}', data.quarter);
+  }
+  
   body.replaceText('\\{\\{TEXT\\}\\}', data.text);
   body.replaceText('\\{\\{DATE\\}\\}', data.date);
   body.replaceText('\\{\\{EMAIL\\}\\}', data.email);
@@ -343,7 +395,14 @@ function createSpanishDocument(data, folder, filename) {
   body.replaceText('\\{\\{POSITIONSPANISH\\}\\}', data.positionSpanish);
   body.replaceText('\\{\\{PANEL\\}\\}', data.panel.toString());
   body.replaceText('\\{\\{YEAR\\}\\}', data.year.toString());
-  body.replaceText('\\{\\{ASSEMBLY\\}\\}', data.assembly);
+  
+  // Replace Assembly or Quarter based on report type
+  if (data.reportType === 'Assembly Report') {
+    body.replaceText('\\{\\{ASSEMBLY\\}\\}', data.assembly);
+  } else {
+    body.replaceText('\\{\\{ASSEMBLY\\}\\}', data.quarter);
+  }
+  
   body.replaceText('\\{\\{TEXTSPANISH\\}\\}', data.textSpanish);
   body.replaceText('\\{\\{DATESPANISH\\}\\}', data.dateSpanish);
   body.replaceText('\\{\\{EMAIL\\}\\}', data.email);
@@ -360,16 +419,20 @@ function createSpanishDocument(data, folder, filename) {
 /**
  * Send success notification to submitter
  */
-function sendSuccessEmail(data, englishUrl, spanishUrl, folderPath) {
-  var subject = 'Your Assembly Report Has Been Created - Panel ' + data.panel;
+function sendSuccessEmail(data, englishUrl, spanishUrl, folderPath, adminEmails) {
+  var subject = 'Your ' + data.reportType + ' Has Been Created - Panel ' + data.panel;
+  
+  var reportDetails = (data.reportType === 'Assembly Report')
+    ? 'Assembly: ' + data.assembly
+    : 'Quarter: ' + data.quarter;
   
   var body = 'Dear ' + data.name + ',\n\n' +
-             'Thank you for submitting your ' + data.position + ' report for ' + 
-             data.assembly + '.\n\n' +
+             'Thank you for submitting your ' + data.position + ' report.\n\n' +
              'REPORT DETAILS:\n' +
+             'Type: ' + data.reportType + '\n' +
              'Panel: ' + data.panel + '\n' +
              'Year: ' + data.year + '\n' +
-             'Assembly: ' + data.assembly + '\n' +
+             reportDetails + '\n' +
              'Folder: Public/' + folderPath + '\n\n' +
              'Your reports have been created and you have edit access to both versions:\n\n' +
              'English Report:\n' + englishUrl + '\n\n' +
@@ -378,12 +441,13 @@ function sendSuccessEmail(data, englishUrl, spanishUrl, folderPath) {
              'You can click the links above to edit these documents directly if you need to make corrections.\n\n' +
              'RESUBMITTING:\n' +
              'If you resubmit the form, it will overwrite these documents with your new submission.\n\n' +
-             'If you have any questions, please contact the Secretary or Chair.\n\n' +
+             'If you have any questions, please contact the appropriate coordinator.\n\n' +
              'In loving service,\n' +
              'Washington Area Al-Anon';
   
   MailApp.sendEmail({
     to: data.email,
+    cc: adminEmails.join(','),
     subject: subject,
     body: body
   });
@@ -393,7 +457,7 @@ function sendSuccessEmail(data, englishUrl, spanishUrl, folderPath) {
  * Send user-friendly error email for validation failures
  */
 function sendUserErrorEmail(data, errors) {
-  var subject = 'Issue with Your Assembly Report Submission';
+  var subject = 'Issue with Your Report Submission';
   
   var body = 'Dear ' + data.name + ',\n\n' +
              'There was a problem processing your report submission:\n\n' +
@@ -413,19 +477,19 @@ function sendUserErrorEmail(data, errors) {
 /**
  * Notify admins of validation error (user mistake)
  */
-function notifyAdminsOfValidation(data, errors) {
-  var subject = 'Assembly Report Validation Error';
+function notifyAdminsOfValidation(data, errors, adminEmails) {
+  var subject = 'Report Validation Error';
   
   var body = 'A user submitted a report with validation errors:\n\n' +
              'Submitter: ' + data.name + ' (' + data.email + ')\n' +
              'Position: ' + data.position + '\n' +
-             'Assembly: ' + data.assembly + '\n\n' +
+             'Report Type: ' + data.reportType + '\n\n' +
              'Validation Errors:\n' +
              errors.map(function(e) { return '• ' + e; }).join('\n') + '\n\n' +
              'The user has been notified and asked to resubmit.\n';
   
   MailApp.sendEmail({
-    to: CONFIG.adminEmails.join(','),
+    to: adminEmails.join(','),
     subject: subject,
     body: body
   });
@@ -434,8 +498,8 @@ function notifyAdminsOfValidation(data, errors) {
 /**
  * Notify admins of system error (script/infrastructure problem)
  */
-function notifyAdminsOfSystemError(error, eventData) {
-  var subject = 'SYSTEM ERROR in Assembly Report Automation';
+function notifyAdminsOfSystemError(error, eventData, adminEmails) {
+  var subject = 'SYSTEM ERROR in Report Automation';
   
   var body = 'A system error occurred while processing a report submission:\n\n' +
              'ERROR MESSAGE:\n' + error.toString() + '\n\n' +
@@ -444,9 +508,8 @@ function notifyAdminsOfSystemError(error, eventData) {
              'Please check the Apps Script execution logs for details.\n';
   
   MailApp.sendEmail({
-    to: CONFIG.adminEmails.join(','),
+    to: adminEmails.join(','),
     subject: subject,
     body: body
   });
 }
-```
