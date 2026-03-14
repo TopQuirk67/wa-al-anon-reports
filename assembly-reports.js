@@ -28,30 +28,31 @@ var CONFIG = {
   sharedDriveId: '0AKCQ-c_MoLypUk9PVA',
   
   // Admin emails for error notifications (by report type)
-  assemblyAdminEmails: ['chair@wa-al-anon.org', 'gareth.houk@gmail.com'],
-  newsletterAdminEmails: ['chair@wa-al-anon.org', 'gareth.houk@gmail.com'],
+  assemblyAdminEmails: ['chair@wa-al-anon.org', 'secretary@wa-al-anon.org'],
+  newsletterAdminEmails: ['chair@wa-al-anon.org', 'newsletter@wa-al-anon.org'],
   
   // Position translations (English -> Spanish)
   positionTranslations: {
-    'Delegate (Officer)': 'Delegado (Oficial)',
-    'Alternate Delegate (Officer)': 'Delegado suplente (Oficial)',
-    'Chair (Officer)': 'Presidente (Oficial)',
-    'Alternate Chair (Officer)': 'Presidente suplente (Oficial)',
-    'Treasurer (Officer)': 'Tesorero (Oficial)',
-    'Secretary (Officer)': 'Secretario (Oficial)',
-    'Archivist (Coordinator)': 'Archivista (Coordinador)',
-    'Custodial Archivist': 'Archivista de custodia',
-    'Group Records (Coordinator)': 'Registros de grupo (Coordinador)',
-    'Literature (Coordinator)': 'Literatura (Coordinador)',
-    'Meeting Technology (Coordinator)': 'Tecnología de reuniones (Coordinador)',
-    'Newsletter (Coordinator)': 'Boletín informativo (Coordinador)',
-    'Outreach (Coordinator)': 'Difusión (Coordinador)',
-    'Pierce County AIS': 'AIS del condado de Pierce',
-    'Seattle AIS': 'Seattle AIS',
-    'Web Editor (Coordinator)': 'Editor web (Coordinador)',
-    'Alateen (Coordinator)': 'Alateen (Coordinador)',
-    'Area Alateen Process Person (Coordinator)': 'Coordinador del proceso de Alateen del área'
-  }
+  'Delegate (Officer)': 'Delegado (Oficial)',
+  'Alternate Delegate (Officer)': 'Delegado suplente (Oficial)',
+  'Chair (Officer)': 'Presidente (Oficial)',
+  'Alternate Chair (Officer)': 'Presidente suplente (Oficial)',
+  'Treasurer (Officer)': 'Tesorero (Oficial)',
+  'Secretary (Officer)': 'Secretario (Oficial)',
+  'Archivist (Coordinator)': 'Archivista (Coordinador)',
+  'Custodial Archivist': 'Archivista de custodia',
+  'Group Records (Coordinator)': 'Registros de grupo (Coordinador)',
+  'Literature (Coordinator)': 'Literatura (Coordinador)',
+  'Meeting Technology (Coordinator)': 'Tecnología de reuniones (Coordinador)',
+  'Newsletter (Coordinator)': 'Boletín informativo (Coordinador)',
+  'Outreach (Coordinator)': 'Difusión (Coordinador)',
+  'Pierce County AIS': 'AIS del condado de Pierce',
+  'Seattle AIS': 'Seattle AIS',
+  'Web Editor (Coordinator)': 'Editor web (Coordinador)',
+  'Alateen (Coordinator)': 'Alateen (Coordinador)',
+  'Alateen Safety, AAPP (Coordinator)': 'Seguridad de Alateen, AAPP (Coordinador)',
+  'Other (Coordinator)': 'Otro (Coordinador)'
+}
 };
 
 // ---------------------------------------------------------------------------
@@ -277,27 +278,51 @@ function validateSubmission(data) {
  * Find folder by searching directly for the full path
  */
 function findFolderByPath(sharedDriveId, path) {
+  Logger.log('Looking for path: ' + path);
+  
   var pathParts = path.split('/');
-  var targetFolderName = pathParts[pathParts.length - 1];
+  // pathParts = ["Panel 65", "2026", "2-Pre-Con", "Reports - Assemblies"]
+  // OR ["Panel 65", "Newsletter", "2026", "Q1"]
   
-  Logger.log('Searching for folder named: ' + targetFolderName);
+  var panelFolder = pathParts[0];  // "Panel 65"
+  var year = pathParts[1] === 'Newsletter' ? pathParts[2] : pathParts[1]; // "2026"
   
-  var folders = DriveApp.getFoldersByName(targetFolderName);
+  Logger.log('Searching for year folder: ' + year);
   
-  while (folders.hasNext()) {
-    var folder = folders.next();
-    var folderPath = buildFolderPath(folder);
+  // Search for year folders
+  var yearFolders = DriveApp.getFoldersByName(year);
+  
+  while (yearFolders.hasNext()) {
+    var yearFolder = yearFolders.next();
     
-    Logger.log('Found folder with path: ' + folderPath);
-    Logger.log('Expected path: ' + path);
+    // Now navigate down from this year folder
+    var currentFolder = yearFolder;
+    var yearIndex = pathParts.indexOf(year);
     
-    if (folderPath === path) {
-      Logger.log('Match found!');
-      return folder;
+    // Navigate through remaining path parts
+    var found = true;
+    for (var i = yearIndex + 1; i < pathParts.length; i++) {
+      var nextFolders = currentFolder.getFoldersByName(pathParts[i]);
+      if (!nextFolders.hasNext()) {
+        found = false;
+        break;
+      }
+      currentFolder = nextFolders.next();
+    }
+    
+    if (found) {
+      // Verify full path matches
+      var fullPath = buildFolderPath(currentFolder);
+      Logger.log('Found candidate: ' + fullPath);
+      
+      if (fullPath === path) {
+        Logger.log('Match found!');
+        return currentFolder;
+      }
     }
   }
   
-  Logger.log('No matching folder found for path: ' + path);
+  Logger.log('No matching folder found');
   return null;
 }
 
