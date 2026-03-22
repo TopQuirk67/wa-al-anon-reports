@@ -127,6 +127,7 @@ function onFormSubmit(e) {
     }
     
     Logger.log('Target folder found: ' + targetFolder.getName());
+    var folderUrl = targetFolder.getUrl();
     
     // Build filenames based on report type
     var englishFilename, spanishFilename;
@@ -163,7 +164,7 @@ function onFormSubmit(e) {
     Logger.log('Edit access granted to: ' + data.email);
     
     // Send notification email
-    sendSuccessEmail(data, englishDoc.getUrl(), spanishDoc.getUrl(), folderPath, adminEmails);
+    sendSuccessEmail(data, englishDoc.getUrl(), spanishDoc.getUrl(), folderPath, folderUrl, adminEmails);
     Logger.log('Notification email sent');
     
     Logger.log('=== Script Completed Successfully ===');
@@ -444,7 +445,7 @@ function createSpanishDocument(data, folder, filename) {
 /**
  * Send success notification to submitter
  */
-function sendSuccessEmail(data, englishUrl, spanishUrl, folderPath, adminEmails) {
+function sendSuccessEmail(data, englishUrl, spanishUrl, folderPath, folderUrl, adminEmails) {
   var subject = 'Your ' + data.reportType + ' Has Been Created - Panel ' + data.panel;
   
   var reportDetails = (data.reportType === 'Assembly Report')
@@ -458,7 +459,8 @@ function sendSuccessEmail(data, englishUrl, spanishUrl, folderPath, adminEmails)
              'Panel: ' + data.panel + '\n' +
              'Year: ' + data.year + '\n' +
              reportDetails + '\n' +
-             'Folder: Public/' + folderPath + '\n\n' +
+             'Folder: Public/' + folderPath + ' (' + folderUrl + ')\n' +
+             'Open all reports in this folder: ' + '<a href="' + folderUrl + '">Public/' + folderPath + '</a>' + '\n\n' +
              'Your reports have been created and you have edit access to both versions:\n\n' +
              'English Report:\n' + englishUrl + '\n\n' +
              'Spanish Report (Informe en español):\n' + spanishUrl + '\n\n' +

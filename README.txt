@@ -13,8 +13,8 @@ When someone submits a report, the system:
 2. Creates an English report document in the correct folder
 3. Creates a Spanish version using a Spanish-language template
 4. Gives the submitter edit access to both documents
-5. Emails them links with folder location
-6. CCs the appropriate coordinator (Secretary for Assembly, Newsletter for Newsletter)
+5. Emails them links with document URLs and the folder link
+6. CCs the appropriate coordinators (Chair + Secretary for Assembly, Chair + Newsletter for Newsletter)
 7. Overwrites previous reports if they resubmit
 
 REPORT TYPES
@@ -24,12 +24,12 @@ The form supports two types of reports:
 1. ASSEMBLY REPORTS
    - Submitted for specific assemblies (1-AWSC-Feb, 2-Pre-Con, etc.)
    - Filed in: Panel XX/YYYY/Assembly-Name/Reports - Assemblies/
-   - CCs: secretary@wa-al-anon.org (and gareth.houk@gmail.com for testing)
+  - CCs: chair@wa-al-anon.org, secretary@wa-al-anon.org
 
 2. NEWSLETTER REPORTS
    - Submitted for quarterly newsletters (Q1, Q2, Q3, Q4)
    - Filed in: Panel XX/Newsletter/YYYY/Quarter/
-   - CCs: newsletter@wa-al-anon.org (and gareth.houk@gmail.com for testing)
+  - CCs: chair@wa-al-anon.org, newsletter@wa-al-anon.org
 
 AUTO-CALCULATED FIELDS
 ----------------------
@@ -84,6 +84,13 @@ Example: Public/Panel 65/Newsletter/2026/Q1/
 IMPORTANT: The folder structure MUST exist before reports are submitted.
 The script will NOT create folders - it will throw an error if the path
 doesn't exist.
+
+FOLDER SEARCH NOTE
+------------------
+The script locates the correct folder by finding the year folder by name
+and walking the remaining path (Assembly or Newsletter subfolders). If
+multiple folders with the same year exist in your Drive, it validates the
+full path before using a match.
 
 DOCUMENT NAMING
 ---------------
@@ -145,17 +152,15 @@ Key configuration values at the top (CONFIG object):
 
 ADMIN EMAIL ADDRESSES
 ---------------------
-Currently configured for testing:
-
 Assembly Reports:
+  - chair@wa-al-anon.org
   - secretary@wa-al-anon.org
-  - gareth.houk@gmail.com
 
 Newsletter Reports:
+  - chair@wa-al-anon.org
   - newsletter@wa-al-anon.org
-  - gareth.houk@gmail.com
 
-To change after testing: Edit CONFIG.assemblyAdminEmails and 
+To change: Edit CONFIG.assemblyAdminEmails and 
 CONFIG.newsletterAdminEmails in the script.
 
 ERROR HANDLING
